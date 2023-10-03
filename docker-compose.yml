@@ -1,0 +1,179 @@
+version: '3'
+
+networks:
+  laravel:
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: dockerfiles/nginx.dockerfile
+      args:
+        - UID=${UID:-1000}
+        - GID=${GID:-1000}
+    container_name: ${NGINX_CONTAINER_NAME}
+    ports:
+      - "80:80"
+    volumes:
+      - ./src:/var/www/html:delegated
+      - ./logs/nginx:/var/log/nginx
+      - ./config/php/php.ini:/usr/local/etc/php/php.ini
+    depends_on:
+      - php
+      - redis
+      - mysql
+      - postgres
+      - mailhog
+    networks:
+      - laravel
+
+  postgres:
+    image: postgres
+    container_name: ${POSTGRES_CONTAINER_NAME}
+    restart: unless-stopped
+    tty: true
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: ${DATABASE_NAME}
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    networks:
+      - laravel
+
+  pgAdmin:
+    image: dpage/pgadmin4
+    container_name: ${PGADMIN_CONTAINER_NAME}
+    restart: unless-stopped
+    ports:
+      - "5000:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+    depends_on:
+      - postgres
+    networks:
+      - laravel
+
+  mysql:
+    image: mariadb:10.6
+    container_name: ${MYSQL_CONTAINER_NAME}
+    restart: unless-stopped
+    tty: true
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE_NAME}
+      MYSQL_USER: ${MYSQL_DATABASE_USER}
+      MYSQL_PASSWORD: ${MYSQL_DATABASE_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_DATABASE_ROOT_PASSWORD}
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+      - ./logs/mysql:/var/log/mysql
+    networks:
+      - laravel
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: ${MY_ADMIN_CONTAINER_NAME}
+    links:
+      - mysql
+    environment:
+      PMA_HOST: ${MY_ADMIN_HOST}
+      PMA_PORT: ${MY_ADMIN_PORT}
+      PMA_USER: ${MY_ADMIN_USER}
+      PMA_PASSWORD: ${MY_ADMIN_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MY_ADMIN_MYSQL_ROOT_PASSWORD}
+      MYSQL_USER: ${MY_ADMIN_MYSQL_USER}
+      MYSQL_PASSWORD: ${MY_ADMIN_MYSQL_PASSWORD}
+      UPLOAD_LIMIT: 512M
+      MEMORY_LIMIT: 512M
+    ports:
+      - "8082:80"
+    volumes:
+      - ./config/php/php.ini:/usr/local/etc/php/php.ini
+    networks:
+      - laravel
+
+  php:
+    build:
+      context: ./dockerfiles
+      dockerfile: php.dockerfile
+      args:
+        - UID=${UID:-1000}
+        - GID=${GID:-1000}
+    container_name: ${PHP_CONTAINER_NAME}
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./src:/var/www/html:delegated
+    networks:
+      - laravel
+
+  redis:
+    image: redis:alpine
+    container_name: ${REDIS_CONTAINER_NAME}
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./logs/redis:/var/log/redis
+    networks:
+      - laravel
+
+  composer:
+    build:
+      context: ./dockerfiles
+      dockerfile: php.dockerfile
+      args:
+        - UID=${UID:-1000}
+        - GID=${GID:-1000}
+    container_name: 'composer'
+    volumes:
+      - ./src:/var/www/html
+    depends_on:
+      - php
+    entrypoint: [ 'composer', '--ignore-platform-reqs' ]
+    networks:
+      - laravel
+
+  npm:
+    image: node:current-alpine
+    container_name: 'npm'
+    volumes:
+      - ./src:/var/www/html
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+      - "5173:5173"
+    working_dir: /var/www/html
+    entrypoint: [ 'npm' ]
+    networks:
+      - laravel
+
+  artisan:
+    build:
+      context: ./dockerfiles
+      dockerfile: php.dockerfile
+      args:
+        - UID=${UID:-1000}
+        - GID=${GID:-1000}
+    container_name: 'artisan'
+    volumes:
+      - ./src:/var/www/html:delegated
+    depends_on:
+      - mysql
+    entrypoint: [ 'php', '/var/www/html/artisan' ]
+    networks:
+      - laravel
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: ${MAILHOG_CONTAINER_NAME}
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - laravel

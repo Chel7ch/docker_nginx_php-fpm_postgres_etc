@@ -1,0 +1,6 @@
+data/mysql
+data/postgres
+logs
+.idea
+.git
+src/node_modules
