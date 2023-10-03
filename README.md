@@ -1,4 +1,4 @@
-# docker-laravel
+# docker laravel/symfony  
 **docker-compose up -d**  or  **make start** etc.
 
 - **nginx** - `:80`
